@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SCL Survey — University of Zurich</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      background: #f8f9fa;
+      color: #333;
+    }
+    .container {
+      text-align: center;
+      padding: 2rem;
+      max-width: 400px;
+    }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #ddd;
+      border-top-color: #555;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 1.5rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    p { color: #666; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="spinner"></div>
+    <p>Loading survey&hellip;</p>
+  </div>
+
+  <script>
+    (function () {
+      // ── Configuration ──────────────────────────────────────────────────────
+      // Google Apps Script web-app URL (see apps_script_logger.gs)
+      var LOG_URL = "https://script.google.com/macros/s/AKfycbxEMqqDqj102tTePyGY9Pdg74Z9GMnbDjsXXmYZ1Iz3boK0-u_vOp0CyEkJuciPAIIkLg/exec";
+
+      // Qualtrics base survey URL (no trailing slash, no ?src=)
+      var SURVEY_BASE_URL = "https://uzhwwf.qualtrics.com/jfe/form/SV_8wgD8eR8NFFKP6m";
+
+      // Valid variation IDs — used to validate the src param
+      var VALID_SRCS = [
+        "research_forward_1", "weaker_2", "research_forward_3",
+        "provocative_4", "provocative_5", "data_driven_6",
+        "fomo_7", "fomo_8", "balanced_9", "philosophical_10"
+      ];
+      // ───────────────────────────────────────────────────────────────────────
+
+      // Read ?src= from the current URL
+      var params = new URLSearchParams(window.location.search);
+      var src = params.get("src") || "unknown";
+
+      // Validate src (don't log garbage)
+      if (VALID_SRCS.indexOf(src) === -1) {
+        src = "unknown";
+      }
+
+      // Build destination Qualtrics URL
+      var destination = SURVEY_BASE_URL + "?src=" + encodeURIComponent(src);
+
+      // Fire-and-forget log request — don't wait for it before redirecting
+      try {
+        var logUrl = LOG_URL + "?src=" + encodeURIComponent(src)
+          + "&ts=" + Date.now()
+          + "&ref=" + encodeURIComponent(document.referrer || "");
+        // Use sendBeacon if available (more reliable on mobile / page unload)
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon(logUrl);
+        } else {
+          var img = new Image();
+          img.src = logUrl;
+        }
+      } catch (e) {
+        // Never block the redirect due to logging errors
+      }
+
+      // Redirect immediately (no artificial delay)
+      window.location.replace(destination);
+    })();
+  </script>
+</body>
+</html>
