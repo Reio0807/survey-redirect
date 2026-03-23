@@ -31,69 +31,84 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     p { color: #666; font-size: 0.95rem; }
+    #debug { font-size: 0.75rem; color: #999; margin-top: 1rem; text-align: left; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="spinner"></div>
-    <p>Loading survey&hellip;</p>
+    <p id="status">Loading survey&hellip;</p>
+    <div id="debug"></div>
   </div>
 
   <script>
     (function () {
-      // ── Configuration ──────────────────────────────────────────────────────
-      // Google Apps Script web-app URL (see apps_script_logger.gs)
       var LOG_URL = "https://script.google.com/macros/s/AKfycbz3Tyoo135Ka_ssaln4dWvdPRafqrpFnben4cFnyP-HhznkCIJed4gfIhvcvlHwxlAgVg/exec";
-
-      // Qualtrics base survey URL (no trailing slash, no ?src=)
       var SURVEY_BASE_URL = "https://uzhwwf.qualtrics.com/jfe/form/SV_8wgD8eR8NFFKP6m";
-
-      // Valid variation IDs — used to validate the src param
       var VALID_SRCS = [
         "research_forward_1", "weaker_2", "research_forward_3",
         "provocative_4", "provocative_5", "data_driven_6",
         "fomo_7", "fomo_8", "balanced_9", "philosophical_10"
       ];
-      // ───────────────────────────────────────────────────────────────────────
 
-      // Read ?src= from the current URL
-      var params = new URLSearchParams(window.location.search);
-      var src = params.get("src") || "unknown";
-
-      // Validate src (don't log garbage)
-      if (VALID_SRCS.indexOf(src) === -1) {
-        src = "unknown";
+      // ── Debug helpers (remove ?debug from URL to hide) ──
+      var showDebug = window.location.search.indexOf("debug") !== -1;
+      var debugEl = document.getElementById("debug");
+      var statusEl = document.getElementById("status");
+      function log(msg) {
+        if (showDebug) debugEl.innerHTML += msg + "<br>";
+        console.log("[redirect]", msg);
       }
 
-      // Build destination Qualtrics URL
-      var destination = SURVEY_BASE_URL + "?src=" + encodeURIComponent(src);
+      // ── Read src ──
+      var params = new URLSearchParams(window.location.search);
+      var src = params.get("src") || "unknown";
+      if (VALID_SRCS.indexOf(src) === -1) src = "unknown";
+      log("src = " + src);
 
-      // Log via GET tracking pixel, then redirect only AFTER the server responds.
-      // onload fires if the response is a valid image; onerror fires otherwise (our
-      // Apps Script returns text/plain → onerror). Either way, the server has processed
-      // the request by the time the callback runs, so the row is safely written.
-      var logUrl = LOG_URL + "?src=" + encodeURIComponent(src)
+      var destination = SURVEY_BASE_URL + "?src=" + encodeURIComponent(src);
+      log("destination = " + destination);
+
+      // ── Build logging URL ──
+      var logUrl = LOG_URL
+        + "?src=" + encodeURIComponent(src)
         + "&ts=" + Date.now()
         + "&ref=" + encodeURIComponent(document.referrer || "");
+      log("logUrl = " + logUrl);
 
       var redirected = false;
-      function go() {
+      function go(reason) {
         if (redirected) return;
         redirected = true;
+        log("Redirecting (" + reason + ")");
+        statusEl.textContent = "Redirecting to survey\u2026";
         window.location.replace(destination);
       }
 
-      try {
-        var img = new Image();
-        img.onload = go;
-        img.onerror = go;
-        img.src = logUrl;
-      } catch (e) {
-        go();
-      }
+      // ── Strategy 1: fetch with no-cors (most reliable for cross-origin GET) ──
+      // The server processes the request; we get an opaque response but don't need it.
+      log("Sending fetch (no-cors GET)\u2026");
+      fetch(logUrl, { method: "GET", mode: "no-cors", credentials: "omit" })
+        .then(function () {
+          log("fetch resolved");
+          go("fetch ok");
+        })
+        .catch(function (err) {
+          log("fetch failed: " + err);
+          // ── Strategy 2: fallback to Image pixel ──
+          log("Trying Image pixel fallback\u2026");
+          try {
+            var img = new Image();
+            img.onload = function () { go("img onload"); };
+            img.onerror = function () { go("img onerror"); };
+            img.src = logUrl;
+          } catch (e2) {
+            go("all failed");
+          }
+        });
 
-      // Safety net: redirect after 3 s even if the pixel never fires an event
-      setTimeout(go, 3000);
+      // ── Safety net: redirect after 4 s no matter what ──
+      setTimeout(function () { go("timeout"); }, 4000);
     })();
   </script>
 </body>
