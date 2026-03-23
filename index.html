@@ -43,7 +43,7 @@
     (function () {
       // ── Configuration ──────────────────────────────────────────────────────
       // Google Apps Script web-app URL (see apps_script_logger.gs)
-      var LOG_URL = "https://script.google.com/macros/s/AKfycbxEMqqDqj102tTePyGY9Pdg74Z9GMnbDjsXXmYZ1Iz3boK0-u_vOp0CyEkJuciPAIIkLg/exec";
+      var LOG_URL = "https://script.google.com/macros/s/AKfycbz3Tyoo135Ka_ssaln4dWvdPRafqrpFnben4cFnyP-HhznkCIJed4gfIhvcvlHwxlAgVg/exec";
 
       // Qualtrics base survey URL (no trailing slash, no ?src=)
       var SURVEY_BASE_URL = "https://uzhwwf.qualtrics.com/jfe/form/SV_8wgD8eR8NFFKP6m";
@@ -68,24 +68,22 @@
       // Build destination Qualtrics URL
       var destination = SURVEY_BASE_URL + "?src=" + encodeURIComponent(src);
 
-      // Fire-and-forget log request — don't wait for it before redirecting
+      // Log via GET tracking pixel — NOT sendBeacon (sendBeacon uses POST; Apps Script
+      // doGet() never runs, so the Sheet stays empty). Short delay before redirect so the
+      // browser does not cancel the in-flight image request.
       try {
         var logUrl = LOG_URL + "?src=" + encodeURIComponent(src)
           + "&ts=" + Date.now()
           + "&ref=" + encodeURIComponent(document.referrer || "");
-        // Use sendBeacon if available (more reliable on mobile / page unload)
-        if (navigator.sendBeacon) {
-          navigator.sendBeacon(logUrl);
-        } else {
-          var img = new Image();
-          img.src = logUrl;
-        }
+        var img = new Image();
+        img.src = logUrl;
       } catch (e) {
-        // Never block the redirect due to logging errors
+        /* ignore */
       }
 
-      // Redirect immediately (no artificial delay)
-      window.location.replace(destination);
+      setTimeout(function () {
+        window.location.replace(destination);
+      }, 250);
     })();
   </script>
 </body>
