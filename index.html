@@ -68,22 +68,32 @@
       // Build destination Qualtrics URL
       var destination = SURVEY_BASE_URL + "?src=" + encodeURIComponent(src);
 
-      // Log via GET tracking pixel — NOT sendBeacon (sendBeacon uses POST; Apps Script
-      // doGet() never runs, so the Sheet stays empty). Short delay before redirect so the
-      // browser does not cancel the in-flight image request.
-      try {
-        var logUrl = LOG_URL + "?src=" + encodeURIComponent(src)
-          + "&ts=" + Date.now()
-          + "&ref=" + encodeURIComponent(document.referrer || "");
-        var img = new Image();
-        img.src = logUrl;
-      } catch (e) {
-        /* ignore */
+      // Log via GET tracking pixel, then redirect only AFTER the server responds.
+      // onload fires if the response is a valid image; onerror fires otherwise (our
+      // Apps Script returns text/plain → onerror). Either way, the server has processed
+      // the request by the time the callback runs, so the row is safely written.
+      var logUrl = LOG_URL + "?src=" + encodeURIComponent(src)
+        + "&ts=" + Date.now()
+        + "&ref=" + encodeURIComponent(document.referrer || "");
+
+      var redirected = false;
+      function go() {
+        if (redirected) return;
+        redirected = true;
+        window.location.replace(destination);
       }
 
-      setTimeout(function () {
-        window.location.replace(destination);
-      }, 250);
+      try {
+        var img = new Image();
+        img.onload = go;
+        img.onerror = go;
+        img.src = logUrl;
+      } catch (e) {
+        go();
+      }
+
+      // Safety net: redirect after 3 s even if the pixel never fires an event
+      setTimeout(go, 3000);
     })();
   </script>
 </body>
